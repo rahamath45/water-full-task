@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Water Tank - EverQuint Demo</title>
+<style>
+  body { font-family: Arial, sans-serif; padding:20px; background:#f7f7f7; color:#111; }
+  .container { max-width:900px; margin:0 auto; background:white; padding:18px; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+  h1{ margin:0 0 10px; font-size:20px; }
+  .controls { display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
+  input[type=text]{ padding:8px; border:1px solid #ddd; border-radius:6px; width:420px; }
+  button{ padding:8px 12px; border:none; background:#0b79d0; color:white; border-radius:6px; cursor:pointer; }
+  button.secondary{ background:#6c757d; }
+  .meta{ margin-top:10px; font-weight:600; }
+  .svg-wrap{ margin-top:18px; border:1px solid #e6e6e6; padding:12px; border-radius:6px; background:#fff;}
+  .legend{ margin-top:8px; font-size:13px; }
+  .small{ font-size:13px; color:#555; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Water Tank Problem — Visual Demo</h1>
+  <div class="controls">
+    <input id="arrInput" placeholder='Enter heights e.g. 0,4,0,0,6,0,6,4,0' />
+    <button id="runBtn">Compute & Render</button>
+    <button id="exampleBtn" class="secondary">Load Example</button>
+  </div>
+  <div class="meta">Total Water: <span id="totalWater">-</span> units</div>
+  <div class="svg-wrap">
+    <svg id="viz" width="100%" height="260" viewBox="0 0 900 260" preserveAspectRatio="xMidYMin meet"></svg>
+  </div>
+  <div class="legend small">Yellow = block, Blue = trapped water.</div>
+</div>
+
+<script>
+function computeWater(heights) {
+  const n = heights.length;
+  let left = 0, right = n - 1;
+  let leftMax = 0, rightMax = 0;
+  const water = new Array(n).fill(0);
+  let total = 0;
+  while (left <= right) {
+    if (heights[left] <= heights[right]) {
+      if (heights[left] >= leftMax) leftMax = heights[left];
+      else {
+        water[left] = leftMax - heights[left];
+        total += water[left];
+      }
+      left++;
+    } else {
+      if (heights[right] >= rightMax) rightMax = heights[right];
+      else {
+        water[right] = rightMax - heights[right];
+        total += water[right];
+      }
+      right--;
+    }
+  }
+  return { total, water };
+}
+
+/* Render bars and water using SVG */
+function render(heights, water) {
+  const svg = document.getElementById('viz');
+  const w = svg.viewBox.baseVal.width || 900;
+  const h = svg.viewBox.baseVal.height || 260;
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const n = heights.length;
+  if (n === 0) return;
+
+  const maxH = Math.max(...heights) + Math.max(...water);
+  const margin = 20;
+  const usableH = h - margin*2;
+  const colWidth = Math.max(18, (w - margin*2) / n);
+
+  // draw grid lines (optional subtle)
+  for (let g=0; g<=maxH; g++) {
+    const y = margin + usableH - (g/maxH)*usableH;
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', margin); line.setAttribute('x2', w-margin);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('stroke', '#f0f0f0'); line.setAttribute('stroke-width', '1');
+    svg.appendChild(line);
+  }
+
+  // draw columns
+  for (let i=0;i<n;i++) {
+    const x = margin + i*colWidth + 4;
+    const blockH = heights[i];
+    const blockPixelH = (blockH/maxH)*usableH;
+    const yBlock = margin + usableH - blockPixelH;
+    // block rect (yellow)
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', x); rect.setAttribute('y', yBlock);
+    rect.setAttribute('width', colWidth - 8); rect.setAttribute('height', blockPixelH);
+    rect.setAttribute('fill', '#ffdd57'); rect.setAttribute('stroke', '#b88f12');
+    svg.appendChild(rect);
+
+    // water rect above block (if any)
+    const wUnits = water[i] || 0;
+    if (wUnits > 0) {
+      const waterPixelH = (wUnits/maxH)*usableH;
+      const yWater = yBlock - waterPixelH;
+      const wrect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      wrect.setAttribute('x', x); wrect.setAttribute('y', yWater);
+      wrect.setAttribute('width', colWidth - 8); wrect.setAttribute('height', waterPixelH);
+      wrect.setAttribute('fill', '#39c0ff'); wrect.setAttribute('opacity', '0.9');
+      svg.appendChild(wrect);
+    }
+
+    // small label for height
+    const txt = document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x', x + (colWidth-8)/2);
+    txt.setAttribute('y', h - 6);
+    txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('font-size','11');
+    txt.setAttribute('fill','#333');
+    txt.textContent = heights[i];
+    svg.appendChild(txt);
+  }
+}
+
+/* UI wiring */
+document.getElementById('runBtn').addEventListener('click', ()=>{
+  const raw = document.getElementById('arrInput').value.trim();
+  if (!raw) return alert('Enter heights array');
+  const arr = raw.split(',').map(s => Number(s.trim())).filter(x => !isNaN(x) && x >= 0);
+  const { total, water } = computeWater(arr);
+  document.getElementById('totalWater').textContent = total;
+  render(arr, water);
+});
+
+document.getElementById('exampleBtn').addEventListener('click', ()=>{
+  const example = '0,4,0,0,6,0,6,4,0';
+  document.getElementById('arrInput').value = example;
+  document.getElementById('runBtn').click();
+});
+
+/* auto-load example on first open */
+document.getElementById('exampleBtn').click();
+</script>
+</body>
+</html>
